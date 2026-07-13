@@ -28,7 +28,7 @@ analysisQueue.process(async ({ sessionId, projectId, idea }) => {
           logs: stageLog as unknown as object,
         },
       })
-      .catch((err) => console.error("Failed to persist progress:", err));
+      .catch((err: unknown) => console.error("Failed to persist progress:", err));
   });
 
   try {
