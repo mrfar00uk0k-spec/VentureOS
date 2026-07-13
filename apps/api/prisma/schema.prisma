@@ -1,0 +1,277 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  VISITOR
+  FREE
+  PRO
+  ADMIN
+  SUPER_ADMIN
+}
+
+enum ProjectStatus {
+  DRAFT
+  ANALYZING
+  COMPLETED
+  FAILED
+}
+
+enum AnalysisStage {
+  IDEA_UNDERSTANDING
+  COMPETITOR_DISCOVERY
+  MARKET_ANALYSIS
+  KEYWORD_RESEARCH
+  REDDIT_INSIGHTS
+  REVIEW_ANALYSIS
+  GAP_DETECTION
+  FACT_CHECK
+  REPORT_GENERATION
+  COMPLETED
+  FAILED
+}
+
+model User {
+  id                     String         @id @default(uuid())
+  email                  String         @unique
+  name                   String?
+  passwordHash           String?
+  role                   UserRole       @default(FREE)
+  credits                Int            @default(10)
+  emailVerified          Boolean        @default(false)
+  emailVerificationToken String?        @unique
+  passwordResetToken     String?        @unique
+  passwordResetExpiresAt DateTime?
+  createdAt              DateTime       @default(now())
+  updatedAt              DateTime       @updatedAt
+  projects               Project[]
+  subscriptions          Subscription[]
+  invoices               Invoice[]
+  notifications          Notification[]
+  auditLogs              AuditLog[]
+  sessions               Session[]
+}
+
+/// A refresh-token session, added in Milestone 3 (Authentication). Only a
+/// hash of the token is ever stored, so a session can be revoked — on
+/// logout, on password reset, or if a rotated-out refresh token is ever
+/// replayed — without that hash being usable to forge a session.
+model Session {
+  id               String    @id @default(uuid())
+  userId           String
+  user             User      @relation(fields: [userId], references: [id])
+  refreshTokenHash String    @unique
+  userAgent        String?
+  ipAddress        String?
+  expiresAt        DateTime
+  revokedAt        DateTime?
+  createdAt        DateTime  @default(now())
+}
+
+model Project {
+  id               String            @id @default(uuid())
+  ownerId          String
+  owner            User              @relation(fields: [ownerId], references: [id])
+  name             String
+  idea             String            @db.Text
+  description      String?           @db.Text
+  industry         String?
+  status           ProjectStatus     @default(DRAFT)
+  currentAiScore   Int?
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+  analysisSessions AnalysisSession[]
+  competitors      Competitor[]
+  keywords         Keyword[]
+  reviews          Review[]
+  redditInsights   RedditInsight[]
+  marketAnalyses   MarketAnalysis[]
+  gaps             GapDetection[]
+  reports          Report[]
+}
+
+model AnalysisSession {
+  id           String        @id @default(uuid())
+  projectId    String
+  project      Project       @relation(fields: [projectId], references: [id])
+  startedAt    DateTime      @default(now())
+  endedAt      DateTime?
+  currentStage AnalysisStage @default(IDEA_UNDERSTANDING)
+  progress     Int           @default(0)
+  currentAgent String?
+  tokenUsage   Int           @default(0)
+  costUsd      Decimal       @default(0) @db.Decimal(10, 4)
+  confidence   Int?
+  status       String        @default("running")
+  logs         Json?
+  errors       Json?
+}
+
+model Competitor {
+  id              String   @id @default(uuid())
+  projectId       String
+  project         Project  @relation(fields: [projectId], references: [id])
+  name            String
+  website         String?
+  description     String?  @db.Text
+  pricing         Json?
+  targetCustomer  String?
+  strengths       Json?
+  weaknesses      Json?
+  differentiator  String?
+  marketPosition  String?
+  popularity      Int?
+  maturity        String?
+  confidence      Int?
+  createdAt       DateTime @default(now())
+}
+
+model Keyword {
+  id               String   @id @default(uuid())
+  projectId        String
+  project          Project  @relation(fields: [projectId], references: [id])
+  term             String
+  type             String // primary | secondary | long_tail
+  intent           String // commercial | informational
+  opportunityScore Int?
+  cluster          String?
+  createdAt        DateTime @default(now())
+}
+
+model Review {
+  id             String   @id @default(uuid())
+  projectId      String
+  project        Project  @relation(fields: [projectId], references: [id])
+  competitorName String?
+  sentiment      String // positive | negative | neutral
+  theme          String
+  frequency      Int?
+  sourceUrl      String?
+  createdAt      DateTime @default(now())
+}
+
+model RedditInsight {
+  id        String   @id @default(uuid())
+  projectId String
+  project   Project  @relation(fields: [projectId], references: [id])
+  type      String // pain_point | feature_request | complaint | positive
+  summary   String   @db.Text
+  frequency Int?
+  sourceUrl String?
+  createdAt DateTime @default(now())
+}
+
+model MarketAnalysis {
+  id               String   @id @default(uuid())
+  projectId        String
+  project          Project  @relation(fields: [projectId], references: [id])
+  demandScore      Int
+  growthScore      Int
+  difficultyScore  Int
+  competitionScore Int
+  opportunityScore Int
+  reasoning        String   @db.Text
+  confidence       Int
+  createdAt        DateTime @default(now())
+}
+
+model GapDetection {
+  id          String   @id @default(uuid())
+  projectId   String
+  project     Project  @relation(fields: [projectId], references: [id])
+  title       String
+  description String   @db.Text
+  impact      String
+  difficulty  String
+  confidence  Int
+  positioning String?
+  createdAt   DateTime @default(now())
+}
+
+model Report {
+  id           String   @id @default(uuid())
+  projectId    String
+  project      Project  @relation(fields: [projectId], references: [id])
+  version      Int      @default(1)
+  summary      String   @db.Text
+  overallScore Int
+  data         Json
+  createdAt    DateTime @default(now())
+  exports      Export[]
+}
+
+model Export {
+  id        String   @id @default(uuid())
+  reportId  String
+  report    Report   @relation(fields: [reportId], references: [id])
+  format    String // pdf | markdown | json
+  fileUrl   String?
+  status    String   @default("pending")
+  createdAt DateTime @default(now())
+}
+
+model Subscription {
+  id                   String    @id @default(uuid())
+  userId               String
+  user                 User      @relation(fields: [userId], references: [id])
+  plan                 String // free | starter | pro | enterprise
+  status               String
+  stripeCustomerId     String?   @unique
+  stripeSubscriptionId String?   @unique
+  renewsAt             DateTime?
+  createdAt            DateTime  @default(now())
+}
+
+model Invoice {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  amountUsd Decimal  @db.Decimal(10, 2)
+  status    String
+  createdAt DateTime @default(now())
+}
+
+model Notification {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  type      String
+  message   String
+  read      Boolean  @default(false)
+  createdAt DateTime @default(now())
+}
+
+model AuditLog {
+  id        String   @id @default(uuid())
+  userId    String?
+  user      User?    @relation(fields: [userId], references: [id])
+  action    String
+  ipAddress String?
+  result    String?
+  metadata  Json?
+  createdAt DateTime @default(now())
+}
+
+model Log {
+  id        String   @id @default(uuid())
+  level     String
+  service   String
+  message   String
+  requestId String?
+  userId    String?
+  metadata  Json?
+  createdAt DateTime @default(now())
+}
+
+model FeatureFlag {
+  id         String   @id @default(uuid())
+  key        String   @unique
+  enabled    Boolean  @default(false)
+  rolloutPct Int      @default(0)
+  updatedAt  DateTime @updatedAt
+}
