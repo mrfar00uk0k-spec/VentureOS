@@ -1,15 +1,16 @@
 "use client";
 
-import { useEffect } from "react";
+import { Suspense, useEffect } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { setAccessToken } from "@/lib/api-client";
 
-export default function OAuthCallbackPage() {
+function Callback() {
   const router = useRouter();
   const params = useSearchParams();
 
   useEffect(() => {
     const token = params.get("accessToken");
+
     if (token) {
       setAccessToken(token);
       router.replace("/dashboard");
@@ -19,6 +20,16 @@ export default function OAuthCallbackPage() {
   }, [params, router]);
 
   return (
-    <main className="flex min-h-screen items-center justify-center text-text-secondary">Signing you in…</main>
+    <main className="flex min-h-screen items-center justify-center text-text-secondary">
+      Signing you in...
+    </main>
+  );
+}
+
+export default function OAuthCallbackPage() {
+  return (
+    <Suspense fallback={<p>Loading...</p>}>
+      <Callback />
+    </Suspense>
   );
 }
